@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,10 +45,16 @@ Only when using the `cookie` mode from the same origin as the WordPress site. Cr
 
 == Changelog ==
 
+= 1.0.2 =
+* Version bump for maintenance release.
+
 = 1.0.1 =
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Version bump for maintenance release.
 
 = 1.0.1 =
 This release introduces the secure REST login endpoint with rate limiting, token hand-offs, and admin-configurable CORS support.
