@@ -26,10 +26,10 @@ class GN_Password_Login_API {
 		add_action('admin_menu',    [$this, 'admin_menu']);
 
 		// CORS for the specific allowed origin (if any set in settings)
-		add_action('rest_api_init', function() {
-			remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
-			add_filter('rest_pre_serve_request', [$this, 'cors_headers']);
-		}, 15);
+                add_action('rest_api_init', function() {
+                        remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+                        add_filter('rest_pre_serve_request', [$this, 'cors_headers'], 10, 4);
+                }, 15);
 	}
 
 	/* ---------------- Settings (allowed origin) ---------------- */
@@ -316,7 +316,7 @@ class GN_Password_Login_API {
 
 	/* ---------------- CORS ---------------- */
 
-	public function cors_headers($served, $result, $request, $server) {
+        public function cors_headers($served, $result = null, $request = null, $server = null) {
 		$opt = get_option(self::OPTION_KEY, ['allowed_origin' => '']);
 		$allowed = $opt['allowed_origin'] ?? '';
 
