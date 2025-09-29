@@ -2,12 +2,14 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
 
 if (!defined('ABSPATH')) exit;
+
+require_once __DIR__ . '/plugin-update-checker/plugin-update-checker.php';
 
 class GN_Password_Login_API {
 	const REST_NAMESPACE = 'gn/v1';
@@ -33,7 +35,7 @@ class GN_Password_Login_API {
 	/* ---------------- Settings (allowed origin) ---------------- */
 
 	public function register_settings() {
-		register_setting(self::OPTION_KEY, self::OPTION_KEY, [
+                register_setting(self::OPTION_KEY, self::OPTION_KEY, [
 			'type'       => 'array',
 			'show_in_rest' => false,
 			'default'    => ['allowed_origin' => ''],
@@ -46,7 +48,7 @@ class GN_Password_Login_API {
 				}
 				return ['allowed_origin' => $origin];
 			}
-		});
+                ]);
 	}
 
 	public function admin_menu() {
@@ -353,3 +355,10 @@ class GN_Password_Login_API {
 }
 
 new GN_Password_Login_API();
+
+$gn_login_api_updater = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+        'https://github.com/GeorgeWebDevCy/gn-password-login-api/',
+        __FILE__,
+        'gn-password-login-api'
+);
+$gn_login_api_updater->setBranch('main');
