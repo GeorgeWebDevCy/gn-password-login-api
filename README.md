@@ -7,6 +7,7 @@ GN Password Login API is a WordPress plugin that exposes hardened REST endpoints
 - **REST login endpoint:** `POST /wp-json/gn/v1/login` accepts `username`, `password`, optional `remember`, `mode`, and `redirect_to` parameters.
 - **Account registration endpoint:** `POST /wp-json/gn/v1/register` creates a new user with validated username, email, and password (optional profile fields supported).
 - **Password reset initiation:** `POST /wp-json/gn/v1/forgot-password` triggers the core WordPress reset email without revealing whether the account exists.
+- **Direct password reset:** `POST /wp-json/gn/v1/reset-password` lets you confirm the user through a custom verification code and immediately update the password without sending the default email.
 - **HTTPS enforcement:** rejects requests made over insecure HTTP (unless `ALLOW_DEV_HTTP` is enabled for local development).
 - **Rate limiting:** caps login attempts to 5 per 15-minute window per IP address and username.
 - **Flexible identifiers:** allows users to authenticate using either their username or email address.
@@ -82,7 +83,7 @@ Successful response:
 }
 ```
 
-### Password reset
+### Password reset (email flow)
 
 ```http
 POST /wp-json/gn/v1/forgot-password HTTP/1.1
@@ -102,6 +103,43 @@ Response (the message is identical even if the account does not exist to prevent
   "message": "If the account exists, a password reset email has been sent."
 }
 ```
+
+### Password reset (custom verification flow)
+
+This endpoint is intended for cases where you verify the user through an out-of-band channel (SMS, help desk workflow, in-person, etc.) and want to avoid sending the default WordPress email. Generate a verification code using the helper and deliver it via your preferred channel, then call the endpoint with that code.
+
+1. Generate and deliver a one-time code:
+
+```php
+$code = GN_Password_Login_API::issue_reset_verification_code($user_id, 900); // 15 minute TTL
+// Send $code through your trusted channel.
+```
+
+2. From your application, reset the password:
+
+```http
+POST /wp-json/gn/v1/reset-password HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{
+  "login": "user@example.com",
+  "verification_code": "the-code-you-issued",
+  "new_password": "a brand new password",
+  "confirm_password": "a brand new password"
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "message": "Password updated successfully."
+}
+```
+
+If you prefer your own verification logic, hook into the `gn_password_api_validate_reset_verification` filter. Return `true` to allow the reset, `false` to reject it, or a `WP_Error` for a custom error response.
 
 ## Configuration
 

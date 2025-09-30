@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,6 +23,7 @@ Key features:
 * Optional `cookie` mode sets the normal WordPress auth cookies immediately for same-origin usage.
 * Registration endpoint validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 * Forgot-password endpoint triggers the standard WordPress reset email while keeping responses generic when the account is unknown.
+* Direct reset endpoint lets you verify users through a custom code and update their password immediately without sending the default email.
 * Settings page at **Settings ▸ GN Login API** lets administrators whitelist a single external origin for CORS while keeping same-origin access functional.
 
 == Installation ==
@@ -49,7 +50,13 @@ Only when using the `cookie` mode from the same origin as the WordPress site. Cr
 
 Send a POST request to `/wp-json/gn/v1/register` with `username`, `email`, and `password` (plus optional profile fields) to create a new account. To start a reset email, POST `/wp-json/gn/v1/forgot-password` with the user's username or email; the response message is intentionally generic to prevent account enumeration.
 
+If you need to avoid the default email entirely, issue a one-time code with `GN_Password_Login_API::issue_reset_verification_code( $user_id )`, deliver it through your trusted channel, then call `POST /wp-json/gn/v1/reset-password` with the `login`, `verification_code`, and `new_password` fields.
+
 == Changelog ==
+
+= 1.2.0 =
+* Added a REST endpoint for direct password resets with custom verification.
+* Introduced helper method for issuing verification codes and documented the new flow.
 
 = 1.1.0 =
 * Added REST endpoints for user registration and initiating password resets.
@@ -62,6 +69,9 @@ Send a POST request to `/wp-json/gn/v1/register` with `username`, `email`, and `
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds a direct password reset endpoint and helper for issuing custom verification codes.
 
 = 1.1.0 =
 Adds registration and password reset endpoints for complete account management from external clients.
