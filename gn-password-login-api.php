@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
@@ -19,6 +19,7 @@ class GN_Password_Login_API {
         const TOKEN_TTL      = 60;     // 60 seconds (one-time login token)
         const ALLOW_DEV_HTTP = false;  // set true only on local dev
         const PASSWORD_MIN_LENGTH = 8;
+        const RESET_CODE_META_KEY = '_gn_password_api_reset_code';
 
 	public function __construct() {
 		add_action('rest_api_init', [$this, 'register_routes']);
@@ -125,6 +126,18 @@ class GN_Password_Login_API {
                         'permission_callback' => '__return_true',
                         'args' => [
                                 'login' => ['required' => true, 'type' => 'string'],
+                        ],
+                ]);
+
+                register_rest_route(self::REST_NAMESPACE, '/reset-password', [
+                        'methods'  => WP_REST_Server::CREATABLE,
+                        'callback' => [$this, 'handle_reset_password'],
+                        'permission_callback' => '__return_true',
+                        'args' => [
+                                'login'              => ['required' => true, 'type' => 'string'],
+                                'verification_code'  => ['required' => true, 'type' => 'string'],
+                                'new_password'       => ['required' => true, 'type' => 'string'],
+                                'confirm_password'   => ['required' => false, 'type' => 'string'],
                         ],
                 ]);
         }
@@ -372,6 +385,109 @@ class GN_Password_Login_API {
                         'success' => true,
                         'message' => 'If the account exists, a password reset email has been sent.',
                 ], 200);
+        }
+
+        public function handle_reset_password(WP_REST_Request $req) {
+                if ($err = $this->require_https_or_fail()) {
+                        return $err;
+                }
+
+                $login       = trim((string)$req->get_param('login'));
+                $code        = trim((string)$req->get_param('verification_code'));
+                $new_pass    = (string)$req->get_param('new_password');
+                $confirm     = $req->get_param('confirm_password');
+
+                if ($login === '' || $code === '' || $new_pass === '') {
+                        return new WP_Error('invalid_request', 'Please provide the login, verification code, and a new password.', ['status' => 400]);
+                }
+
+                if ($confirm !== null && !hash_equals($new_pass, (string)$confirm)) {
+                        return new WP_Error('password_mismatch', 'Password confirmation does not match.', ['status' => 400]);
+                }
+
+                if (strlen($new_pass) < self::PASSWORD_MIN_LENGTH) {
+                        return new WP_Error('weak_password', sprintf('Password must be at least %d characters.', self::PASSWORD_MIN_LENGTH), ['status' => 400]);
+                }
+
+                $user = is_email($login)
+                        ? get_user_by('email', $login)
+                        : get_user_by('login', $login);
+
+                if (!$user) {
+                        // Avoid account enumeration by responding generically.
+                        return new WP_REST_Response([
+                                'success' => true,
+                                'message' => 'If the account exists, the password has been updated.',
+                        ], 200);
+                }
+
+                $verified = apply_filters('gn_password_api_validate_reset_verification', null, $user, $code, $req);
+
+                if ($verified instanceof WP_Error) {
+                        return $verified;
+                }
+
+                if ($verified === null) {
+                        $verified = $this->verify_stored_reset_code($user->ID, $code);
+                }
+
+                if ($verified instanceof WP_Error) {
+                        return $verified;
+                }
+
+                if (!$verified) {
+                        return new WP_Error('invalid_verification', 'The verification code is invalid or has expired.', ['status' => 403]);
+                }
+
+                wp_set_password($new_pass, $user->ID);
+                delete_user_meta($user->ID, self::RESET_CODE_META_KEY);
+
+                do_action('gn_password_api_password_reset', $user->ID, $req);
+
+                return new WP_REST_Response([
+                        'success' => true,
+                        'message' => 'Password updated successfully.',
+                ], 200);
+        }
+
+        private function verify_stored_reset_code($user_id, $code) {
+                $bundle = get_user_meta($user_id, self::RESET_CODE_META_KEY, true);
+
+                if (!is_array($bundle) || empty($bundle['hash']) || empty($bundle['expires'])) {
+                        return false;
+                }
+
+                if (time() > (int)$bundle['expires']) {
+                        delete_user_meta($user_id, self::RESET_CODE_META_KEY);
+                        return false;
+                }
+
+                $hash = $bundle['hash'];
+
+                if (!wp_check_password($code, $hash, $user_id)) {
+                        return false;
+                }
+
+                return true;
+        }
+
+        public static function issue_reset_verification_code($user_id, $ttl = 900) {
+                $user = get_user_by('id', $user_id);
+                if (!$user) {
+                        return new WP_Error('invalid_user', 'User not found.');
+                }
+
+                $ttl = max(60, (int)$ttl);
+                $code = wp_generate_password(20, false, false);
+
+                $data = [
+                        'hash'    => wp_hash_password($code),
+                        'expires' => time() + $ttl,
+                ];
+
+                update_user_meta($user_id, self::RESET_CODE_META_KEY, $data);
+
+                return $code;
         }
 
 	private function safe_redirect_url($url) {
