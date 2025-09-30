@@ -8,6 +8,7 @@ GN Password Login API is a WordPress plugin that exposes hardened REST endpoints
 - **Account registration endpoint:** `POST /wp-json/gn/v1/register` creates a new user with validated username, email, and password (optional profile fields supported).
 - **Password reset initiation:** `POST /wp-json/gn/v1/forgot-password` triggers the core WordPress reset email without revealing whether the account exists.
 - **Direct password reset:** `POST /wp-json/gn/v1/reset-password` lets you confirm the user through a custom verification code and immediately update the password without sending the default email.
+- **Authenticated password change:** `POST /wp-json/gn/v1/change-password` lets logged-in users rotate their password after confirming the current one.
 - **HTTPS enforcement:** rejects requests made over insecure HTTP (unless `ALLOW_DEV_HTTP` is enabled for local development).
 - **Rate limiting:** caps login attempts to 5 per 15-minute window per IP address and username.
 - **Flexible identifiers:** allows users to authenticate using either their username or email address.
@@ -140,6 +141,32 @@ Successful response:
 ```
 
 If you prefer your own verification logic, hook into the `gn_password_api_validate_reset_verification` filter. Return `true` to allow the reset, `false` to reject it, or a `WP_Error` for a custom error response.
+
+### Password change (authenticated users)
+
+```http
+POST /wp-json/gn/v1/change-password HTTP/1.1
+Host: example.com
+Content-Type: application/json
+Cookie: wordpress_logged_in=...
+
+{
+  "current_password": "existing password",
+  "new_password": "a new, stronger password",
+  "confirm_password": "a new, stronger password"
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "message": "Password updated successfully."
+}
+```
+
+The endpoint requires the caller to already be authenticated (via cookies or another REST auth method), enforces the same minimum length as registration, re-validates the current password, and refreshes the session after the password change.
 
 ## Configuration
 
