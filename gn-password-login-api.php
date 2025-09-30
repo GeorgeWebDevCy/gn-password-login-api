@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.0.2
+ * Version: 1.1.0
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
@@ -12,12 +12,13 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/plugin-update-checker/plugin-update-checker.php';
 
 class GN_Password_Login_API {
-	const REST_NAMESPACE = 'gn/v1';
-	const OPTION_KEY     = 'gn_login_api_settings';
-	const ATTEMPT_LIMIT  = 5;      // attempts per window
-	const WINDOW_SECONDS = 15 * 60; // 15 minutes
-	const TOKEN_TTL      = 60;     // 60 seconds (one-time login token)
-	const ALLOW_DEV_HTTP = false;  // set true only on local dev
+        const REST_NAMESPACE = 'gn/v1';
+        const OPTION_KEY     = 'gn_login_api_settings';
+        const ATTEMPT_LIMIT  = 5;      // attempts per window
+        const WINDOW_SECONDS = 15 * 60; // 15 minutes
+        const TOKEN_TTL      = 60;     // 60 seconds (one-time login token)
+        const ALLOW_DEV_HTTP = false;  // set true only on local dev
+        const PASSWORD_MIN_LENGTH = 8;
 
 	public function __construct() {
 		add_action('rest_api_init', [$this, 'register_routes']);
@@ -90,20 +91,43 @@ class GN_Password_Login_API {
 
 	/* ---------------- REST Route ---------------- */
 
-	public function register_routes() {
-		register_rest_route(self::REST_NAMESPACE, '/login', [
-			'methods'  => WP_REST_Server::CREATABLE, // POST
-			'callback' => [$this, 'handle_login'],
-			'permission_callback' => '__return_true',
-			'args' => [
+        public function register_routes() {
+                register_rest_route(self::REST_NAMESPACE, '/login', [
+                        'methods'  => WP_REST_Server::CREATABLE, // POST
+                        'callback' => [$this, 'handle_login'],
+                        'permission_callback' => '__return_true',
+                        'args' => [
 				'username' => ['required' => true, 'type' => 'string'],
 				'password' => ['required' => true, 'type' => 'string'],
 				'remember' => ['required' => false, 'type' => 'boolean'],
 				'mode'     => ['required' => false, 'type' => 'string', 'enum' => ['cookie','token']],
-				'redirect_to' => ['required' => false, 'type' => 'string'],
-			],
-		]);
-	}
+                                'redirect_to' => ['required' => false, 'type' => 'string'],
+                        ],
+                ]);
+
+                register_rest_route(self::REST_NAMESPACE, '/register', [
+                        'methods'  => WP_REST_Server::CREATABLE,
+                        'callback' => [$this, 'handle_register'],
+                        'permission_callback' => '__return_true',
+                        'args' => [
+                                'username'      => ['required' => true, 'type' => 'string'],
+                                'email'         => ['required' => true, 'type' => 'string'],
+                                'password'      => ['required' => true, 'type' => 'string'],
+                                'first_name'    => ['required' => false, 'type' => 'string'],
+                                'last_name'     => ['required' => false, 'type' => 'string'],
+                                'display_name'  => ['required' => false, 'type' => 'string'],
+                        ],
+                ]);
+
+                register_rest_route(self::REST_NAMESPACE, '/forgot-password', [
+                        'methods'  => WP_REST_Server::CREATABLE,
+                        'callback' => [$this, 'handle_forgot_password'],
+                        'permission_callback' => '__return_true',
+                        'args' => [
+                                'login' => ['required' => true, 'type' => 'string'],
+                        ],
+                ]);
+        }
 
 	private function require_https_or_fail() {
 		if (is_ssl()) return;
@@ -136,11 +160,11 @@ class GN_Password_Login_API {
 		delete_transient($key);
 	}
 
-	public function handle_login(WP_REST_Request $req) {
-		// HTTPS check
-		if ($err = $this->require_https_or_fail()) {
-			return $err;
-		}
+        public function handle_login(WP_REST_Request $req) {
+                // HTTPS check
+                if ($err = $this->require_https_or_fail()) {
+                        return $err;
+                }
 
 		// Basic input
 		$username = trim((string)$req->get_param('username'));
@@ -237,11 +261,11 @@ class GN_Password_Login_API {
 			'redirect_to' => $redir,
 		], $login_url);
 
-		return new WP_REST_Response([
-			'success' => true,
-			'mode'    => 'token',
-			'token'   => $token,
-			'token_expires_in' => self::TOKEN_TTL,
+                return new WP_REST_Response([
+                        'success' => true,
+                        'mode'    => 'token',
+                        'token'   => $token,
+                        'token_expires_in' => self::TOKEN_TTL,
 			'token_login_url'  => $token_url,
 			'user'    => [
 				'id'       => $user->ID,
@@ -250,8 +274,105 @@ class GN_Password_Login_API {
 				'nicename' => $user->user_nicename,
 				'display'  => $user->display_name,
 			],
-		], 200);
-	}
+                ], 200);
+        }
+
+        public function handle_register(WP_REST_Request $req) {
+                if ($err = $this->require_https_or_fail()) {
+                        return $err;
+                }
+
+                $username = sanitize_user(trim((string)$req->get_param('username')), true);
+                $email    = sanitize_email((string)$req->get_param('email'));
+                $password = (string)$req->get_param('password');
+                $first    = sanitize_text_field((string)$req->get_param('first_name'));
+                $last     = sanitize_text_field((string)$req->get_param('last_name'));
+                $display  = sanitize_text_field((string)$req->get_param('display_name'));
+
+                if ($username === '') {
+                        return new WP_Error('invalid_username', 'Please provide a valid username.', ['status' => 400]);
+                }
+                if (!validate_username($username)) {
+                        return new WP_Error('invalid_username', 'Please provide a valid username.', ['status' => 400]);
+                }
+                if (username_exists($username)) {
+                        return new WP_Error('username_exists', 'That username is already taken.', ['status' => 409]);
+                }
+
+                if ($email === '' || !is_email($email)) {
+                        return new WP_Error('invalid_email', 'Please provide a valid email address.', ['status' => 400]);
+                }
+                if (email_exists($email)) {
+                        return new WP_Error('email_exists', 'That email address is already registered.', ['status' => 409]);
+                }
+
+                if (strlen($password) < self::PASSWORD_MIN_LENGTH) {
+                        return new WP_Error('weak_password', sprintf('Password must be at least %d characters.', self::PASSWORD_MIN_LENGTH), ['status' => 400]);
+                }
+
+                $userdata = [
+                        'user_login' => $username,
+                        'user_pass'  => $password,
+                        'user_email' => $email,
+                        'first_name' => $first,
+                        'last_name'  => $last,
+                ];
+
+                if ($display !== '') {
+                        $userdata['display_name'] = $display;
+                }
+
+                $user_id = wp_insert_user($userdata);
+                if (is_wp_error($user_id)) {
+                        return new WP_Error('registration_failed', 'We could not create your account at this time.', ['status' => 500]);
+                }
+
+                if ($display === '' && $first !== '' && $last !== '') {
+                        wp_update_user([
+                                'ID' => $user_id,
+                                'display_name' => trim($first . ' ' . $last),
+                        ]);
+                }
+
+                do_action('gn_password_api_user_registered', $user_id, $req);
+
+                return new WP_REST_Response([
+                        'success' => true,
+                        'message' => 'Account created successfully.',
+                        'user_id' => $user_id,
+                ], 201);
+        }
+
+        public function handle_forgot_password(WP_REST_Request $req) {
+                if ($err = $this->require_https_or_fail()) {
+                        return $err;
+                }
+
+                $login = trim((string)$req->get_param('login'));
+                if ($login === '') {
+                        return new WP_Error('invalid_request', 'Please provide a username or email.', ['status' => 400]);
+                }
+
+                $result = retrieve_password($login);
+
+                if (is_wp_error($result)) {
+                        $code = $result->get_error_code();
+                        if (in_array($code, ['invalid_email', 'invalidcombo', 'invalid_username'], true)) {
+                                // Avoid account enumeration – respond success even if the account is unknown.
+                                return new WP_REST_Response([
+                                        'success' => true,
+                                        'message' => 'If the account exists, a password reset email has been sent.',
+                                ], 200);
+                        }
+
+                        return new WP_Error('reset_failed', 'We could not start a password reset at this time.', ['status' => 500]);
+                }
+
+                return new WP_REST_Response([
+                        'success' => true,
+                        'message' => 'If the account exists, a password reset email has been sent.',
+                ], 200);
+        }
 
 	private function safe_redirect_url($url) {
 		// Only allow internal redirects; otherwise fallback to home.
