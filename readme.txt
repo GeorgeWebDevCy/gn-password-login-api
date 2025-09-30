@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,6 +24,7 @@ Key features:
 * Registration endpoint validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 * Forgot-password endpoint triggers the standard WordPress reset email while keeping responses generic when the account is unknown.
 * Direct reset endpoint lets you verify users through a custom code and update their password immediately without sending the default email.
+* Authenticated change-password endpoint lets logged-in users rotate their password after confirming the current one.
 * Settings page at **Settings ▸ GN Login API** lets administrators whitelist a single external origin for CORS while keeping same-origin access functional.
 
 == Installation ==
@@ -54,6 +55,10 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 
 == Changelog ==
 
+= 1.3.0 =
+* Added an authenticated REST endpoint for users to change their own password after confirming the current credential.
+* Automatically refreshes the session after a successful password change and documents the new flow.
+
 = 1.2.0 =
 * Added a REST endpoint for direct password resets with custom verification.
 * Introduced helper method for issuing verification codes and documented the new flow.
@@ -69,6 +74,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Adds an authenticated change-password endpoint and refreshes the session after a successful update.
 
 = 1.2.0 =
 Adds a direct password reset endpoint and helper for issuing custom verification codes.

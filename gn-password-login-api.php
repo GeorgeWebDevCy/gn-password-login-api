@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
@@ -140,6 +140,25 @@ class GN_Password_Login_API {
                                 'confirm_password'   => ['required' => false, 'type' => 'string'],
                         ],
                 ]);
+
+                register_rest_route(self::REST_NAMESPACE, '/change-password', [
+                        'methods'  => WP_REST_Server::CREATABLE,
+                        'callback' => [$this, 'handle_change_password'],
+                        'permission_callback' => [$this, 'require_logged_in_user'],
+                        'args' => [
+                                'current_password' => ['required' => true, 'type' => 'string'],
+                                'new_password'     => ['required' => true, 'type' => 'string'],
+                                'confirm_password' => ['required' => false, 'type' => 'string'],
+                        ],
+                ]);
+        }
+
+        public function require_logged_in_user() {
+                if (is_user_logged_in()) {
+                        return true;
+                }
+
+                return new WP_Error('not_logged_in', 'You must be logged in to change your password.', ['status' => 401]);
         }
 
 	private function require_https_or_fail() {
@@ -443,6 +462,56 @@ class GN_Password_Login_API {
                 delete_user_meta($user->ID, self::RESET_CODE_META_KEY);
 
                 do_action('gn_password_api_password_reset', $user->ID, $req);
+
+                return new WP_REST_Response([
+                        'success' => true,
+                        'message' => 'Password updated successfully.',
+                ], 200);
+        }
+
+        public function handle_change_password(WP_REST_Request $req) {
+                if ($err = $this->require_https_or_fail()) {
+                        return $err;
+                }
+
+                $current = (string)$req->get_param('current_password');
+                $new     = (string)$req->get_param('new_password');
+                $confirm = $req->get_param('confirm_password');
+
+                if ($current === '' || $new === '') {
+                        return new WP_Error('invalid_request', 'Please provide your current and new password.', ['status' => 400]);
+                }
+
+                if ($confirm !== null && !hash_equals($new, (string)$confirm)) {
+                        return new WP_Error('password_mismatch', 'Password confirmation does not match.', ['status' => 400]);
+                }
+
+                if (strlen($new) < self::PASSWORD_MIN_LENGTH) {
+                        return new WP_Error('weak_password', sprintf('Password must be at least %d characters.', self::PASSWORD_MIN_LENGTH), ['status' => 400]);
+                }
+
+                $user = wp_get_current_user();
+
+                if (!$user || !$user->ID) {
+                        return new WP_Error('invalid_user', 'Unable to determine the current user.', ['status' => 500]);
+                }
+
+                if (!wp_check_password($current, $user->user_pass, $user->ID)) {
+                        return new WP_Error('incorrect_password', 'Your current password is incorrect.', ['status' => 403]);
+                }
+
+                if (hash_equals($current, $new)) {
+                        return new WP_Error('password_unchanged', 'Your new password must be different from the current password.', ['status' => 400]);
+                }
+
+                wp_set_password($new, $user->ID);
+
+                // Re-establish the user session with the new credentials for convenience.
+                wp_set_auth_cookie($user->ID);
+                wp_set_current_user($user->ID);
+                do_action('wp_login', $user->user_login, $user);
+
+                do_action('gn_password_api_password_changed', $user->ID, $req);
 
                 return new WP_REST_Response([
                         'success' => true,
