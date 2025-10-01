@@ -587,25 +587,41 @@ class GN_Password_Login_API {
 		$user_id = isset($_GET['u']) ? absint($_GET['u']) : 0;
 		$redirect_to = isset($_GET['redirect_to']) ? $this->safe_redirect_url(esc_url_raw($_GET['redirect_to'])) : home_url('/');
 
-		if (!$token || !$user_id) {
-			wp_die(__('Invalid token login request.', 'gn-login'));
-		}
+               if (!$token || !$user_id) {
+                       wp_die(
+                               __('Invalid token login request.', 'gn-login'),
+                               __('Token validation failed', 'gn-login'),
+                               ['response' => 403]
+                       );
+               }
 
 		$meta_key = '_gn_login_token_' . $token;
 		$rows = get_user_meta($user_id, $meta_key, false);
-		if (empty($rows)) {
-			wp_die(__('This token is invalid or already used.', 'gn-login'));
-		}
+               if (empty($rows)) {
+                       wp_die(
+                               __('This token is invalid or already used.', 'gn-login'),
+                               __('Token validation failed', 'gn-login'),
+                               ['response' => 403]
+                       );
+               }
 
                 $payload = json_decode((string)$rows[0], true);
                 delete_user_meta($user_id, $meta_key); // one-time use
 
-                if (!is_array($payload)) {
-                        wp_die(__('Invalid token payload.', 'gn-login'));
-                }
-                if (time() > (int)$payload['expires']) {
-                        wp_die(__('This token has expired. Please log in again.', 'gn-login'));
-                }
+               if (!is_array($payload)) {
+                       wp_die(
+                               __('Invalid token payload.', 'gn-login'),
+                               __('Token validation failed', 'gn-login'),
+                               ['response' => 403]
+                       );
+               }
+               if (time() > (int)$payload['expires']) {
+                       wp_die(
+                               __('This token has expired. Please log in again.', 'gn-login'),
+                               __('Token validation failed', 'gn-login'),
+                               ['response' => 403]
+                       );
+               }
 
                 // Tokens can optionally be locked to the requesting IP and/or user agent via filters.
                 $ip = $this->get_client_ip();
