@@ -13,7 +13,7 @@ GN Password Login API is a WordPress plugin that exposes hardened REST endpoints
 - **Rate limiting:** caps login attempts to 5 per 15-minute window per IP address and username.
 - **Flexible identifiers:** allows users to authenticate using either their username or email address.
 - **Two response modes:**
-  - `mode: token` (default) returns a one-time login URL and token with a 60-second TTL for secure cross-origin hand-offs.
+  - `mode: token` (default) returns a one-time login URL and token with a one-year TTL for secure cross-origin hand-offs.
   - `mode: cookie` sets the WordPress auth cookies immediately for same-origin browser use.
 - **Single-use token consumption:** `/wp-login.php?action=gn_token_login&token=...&u=...` consumes the token, verifies IP/UA, and redirects to a safe internal URL.
 - **CORS control:** settings page under **Settings ▸ GN Login API** lets administrators whitelist a single external origin; same-origin requests work out-of-the-box.
@@ -42,7 +42,7 @@ Successful token-mode response:
   "success": true,
   "mode": "token",
   "token": "550e8400-e29b-41d4-a716-446655440000",
-  "token_expires_in": 60,
+  "token_expires_in": 31536000,
   "token_login_url": "https://example.com/wp-login.php?action=gn_token_login&token=...",
   "user": {
     "id": 123,
@@ -180,7 +180,7 @@ The endpoint requires the caller to already be authenticated (via cookies or ano
 - Registration validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 - Password reset responses remain generic when the account is unknown to avoid user enumeration.
 - The plugin intentionally returns a generic error message for failed logins to avoid user enumeration.
-- One-time tokens expire after 60 seconds and are restricted to the requesting IP/UA pair for additional safety.
+- One-time tokens expire after one year and are restricted to the requesting IP/UA pair for additional safety.
 - Redirect targets are sanitized to prevent external redirects.
 
 ## Development
