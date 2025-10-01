@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 
 == Changelog ==
 
+= 1.3.3 =
+* Version bump for maintenance release.
+
 = 1.3.2 =
 * Allow token login URLs to work across differing IPs/user agents by default while providing filters to opt in to strict locking.
 * Add a final validation filter that can veto token logins before cookies are issued.
@@ -88,6 +91,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.3.3 =
+Maintenance release.
 
 = 1.3.2 =
 Improves compatibility of token login URLs across browsers/devices and introduces new filters for optional strict locking.
