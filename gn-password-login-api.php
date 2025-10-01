@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
