@@ -15,7 +15,7 @@ GN Password Login API is a WordPress plugin that exposes hardened REST endpoints
 - **Two response modes:**
   - `mode: token` (default) returns a one-time login URL and token with a one-year TTL for secure cross-origin hand-offs.
   - `mode: cookie` sets the WordPress auth cookies immediately for same-origin browser use.
-- **Single-use token consumption:** `/wp-login.php?action=gn_token_login&token=...&u=...` consumes the token, verifies IP/UA, and redirects to a safe internal URL.
+- **Single-use token consumption:** `/wp-login.php?action=gn_token_login&token=...&u=...` consumes the token, optionally verifies the requesting IP/UA (when filters enable locking), and redirects to a safe internal URL.
 - **CORS control:** settings page under **Settings ▸ GN Login API** lets administrators whitelist a single external origin; same-origin requests work out-of-the-box.
 - **Plugin self-updates:** integrates with the Plugin Update Checker library to pull updates from GitHub.
 
@@ -54,7 +54,7 @@ Successful token-mode response:
 }
 ```
 
-To complete the flow, open `token_login_url` in a browser/webview. The plugin validates the token, IP, and user agent, sets the auth cookies (honoring `remember`), and redirects to the sanitized `redirect_to` URL.
+To complete the flow, open `token_login_url` in a browser/webview. The plugin validates the token, optionally checks the IP and user agent when locking is enabled, sets the auth cookies (honoring `remember`), and redirects to the sanitized `redirect_to` URL.
 
 When `mode` is set to `cookie`, the endpoint immediately sets the auth cookies and returns a simplified success payload for same-origin usage.
 
@@ -180,8 +180,14 @@ The endpoint requires the caller to already be authenticated (via cookies or ano
 - Registration validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 - Password reset responses remain generic when the account is unknown to avoid user enumeration.
 - The plugin intentionally returns a generic error message for failed logins to avoid user enumeration.
-- One-time tokens expire after one year and are restricted to the requesting IP/UA pair for additional safety.
+- One-time tokens expire after one year and can optionally be restricted to the requesting IP and/or user agent through filters.
 - Redirect targets are sanitized to prevent external redirects.
+
+## Hooks
+
+- `gn_password_api_lock_token_to_ip`: return `true` to tie newly issued token URLs to the requesting IP address. Defaults to `false` to support mobile/native hand-offs where IPs may change between requests.
+- `gn_password_api_lock_token_to_user_agent`: return `true` to require that the consuming browser/user agent matches the one that requested the token. Defaults to `false` to avoid mismatches between native apps and in-app browsers.
+- `gn_password_api_validate_token_payload`: run final validation before the auth cookies are issued. Return `false` or a `WP_Error` to reject the token.
 
 ## Development
 

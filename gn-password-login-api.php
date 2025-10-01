@@ -2,7 +2,7 @@
 /**
  * Plugin Name: GN Password Login API
  * Description: Secure REST login via username/email + password with rate limiting, HTTPS checks, and one-time token login URL for cross-origin/mobile apps.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: George Nicolaou
  * License: GPL-2.0+
  */
@@ -271,17 +271,25 @@ class GN_Password_Login_API {
 		}
 
 		// Default: token mode (safer for cross-origin/mobile)
-		$token = wp_generate_uuid4();
-		$meta_key = '_gn_login_token_' . $token;
+                $token = wp_generate_uuid4();
+                $meta_key = '_gn_login_token_' . $token;
 
-		// Store as user meta with tight TTL info (ip, ua, expiry)
-		$payload = [
-			'expires'   => time() + self::TOKEN_TTL,
-			'ip'        => $_SERVER['REMOTE_ADDR'] ?? '',
-			'ua'        => $_SERVER['HTTP_USER_AGENT'] ?? '',
-			'remember'  => $remember,
-		];
-		add_user_meta($user->ID, $meta_key, wp_json_encode($payload), true);
+                $client_ip = $this->get_client_ip();
+                $client_ua = $this->get_client_user_agent();
+
+                $lock_ip = apply_filters('gn_password_api_lock_token_to_ip', false, $user, $req);
+                $lock_ua = apply_filters('gn_password_api_lock_token_to_user_agent', false, $user, $req);
+
+                // Store as user meta with tight TTL info (ip, ua, expiry)
+                $payload = [
+                        'expires'   => time() + self::TOKEN_TTL,
+                        'ip'        => $client_ip,
+                        'ua'        => $client_ua,
+                        'remember'  => $remember,
+                        'lock_ip'   => (bool)$lock_ip,
+                        'lock_ua'   => (bool)$lock_ua,
+                ];
+                add_user_meta($user->ID, $meta_key, wp_json_encode($payload), true);
 
 		// Build token login URL
 		$login_url = wp_login_url();
@@ -589,25 +597,45 @@ class GN_Password_Login_API {
 			wp_die(__('This token is invalid or already used.', 'gn-login'));
 		}
 
-		$payload = json_decode((string)$rows[0], true);
-		delete_user_meta($user_id, $meta_key); // one-time use
+                $payload = json_decode((string)$rows[0], true);
+                delete_user_meta($user_id, $meta_key); // one-time use
 
-		if (!is_array($payload)) {
-			wp_die(__('Invalid token payload.', 'gn-login'));
-		}
-		if (time() > (int)$payload['expires']) {
-			wp_die(__('This token has expired. Please log in again.', 'gn-login'));
-		}
+                if (!is_array($payload)) {
+                        wp_die(__('Invalid token payload.', 'gn-login'));
+                }
+                if (time() > (int)$payload['expires']) {
+                        wp_die(__('This token has expired. Please log in again.', 'gn-login'));
+                }
 
-		// (Optional) tie token to same IP/UA for extra safety; comment out to relax.
-		$ip = $_SERVER['REMOTE_ADDR'] ?? '';
-		$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-		if (!empty($payload['ip']) && $payload['ip'] !== $ip) {
-			wp_die(__('Token IP mismatch.', 'gn-login'));
-		}
-		if (!empty($payload['ua']) && $payload['ua'] !== $ua) {
-			wp_die(__('Token UA mismatch.', 'gn-login'));
-		}
+                // Tokens can optionally be locked to the requesting IP and/or user agent via filters.
+                $ip = $this->get_client_ip();
+                $ua = $this->get_client_user_agent();
+
+                $lock_ip = !empty($payload['lock_ip']);
+                $lock_ua = !empty($payload['lock_ua']);
+
+                if ($lock_ip && !empty($payload['ip']) && !hash_equals((string)$payload['ip'], (string)$ip)) {
+                        wp_die(__('Token IP mismatch. Please request a new login link.', 'gn-login'), __('Token validation failed', 'gn-login'), ['response' => 403]);
+                }
+                if ($lock_ua && !empty($payload['ua']) && !hash_equals((string)$payload['ua'], (string)$ua)) {
+                        wp_die(__('Token browser mismatch. Please request a new login link.', 'gn-login'), __('Token validation failed', 'gn-login'), ['response' => 403]);
+                }
+
+                $validation = apply_filters('gn_password_api_validate_token_payload', true, $payload, [
+                        'ip' => $ip,
+                        'ua' => $ua,
+                        'user_id' => $user_id,
+                ]);
+
+                if ($validation instanceof WP_Error) {
+                        $data = $validation->get_error_data();
+                        $response_code = (is_array($data) && isset($data['response'])) ? (int)$data['response'] : 403;
+                        wp_die($validation->get_error_message(), __('Token validation failed', 'gn-login'), ['response' => $response_code]);
+                }
+
+                if ($validation === false) {
+                        wp_die(__('Token validation was rejected.', 'gn-login'), __('Token validation failed', 'gn-login'), ['response' => 403]);
+                }
 
 		// Log user in
 		wp_set_auth_cookie($user_id, !empty($payload['remember']));
@@ -651,13 +679,23 @@ class GN_Password_Login_API {
 		return $served;
 	}
 
-	private function is_same_origin($origin) {
-		if (!$origin) return false;
-		$site = get_site_url(null, '/', is_ssl() ? 'https' : 'http');
-		$oh = parse_url($origin, PHP_URL_HOST);
-		$sh = parse_url($site,   PHP_URL_HOST);
-		return ($oh && $sh && strcasecmp($oh, $sh) === 0);
-	}
+        private function is_same_origin($origin) {
+                if (!$origin) return false;
+                $site = get_site_url(null, '/', is_ssl() ? 'https' : 'http');
+                $oh = parse_url($origin, PHP_URL_HOST);
+                $sh = parse_url($site,   PHP_URL_HOST);
+                return ($oh && $sh && strcasecmp($oh, $sh) === 0);
+        }
+
+        private function get_client_ip() {
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                return is_string($ip) ? $ip : '';
+        }
+
+        private function get_client_user_agent() {
+                $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                return is_string($ua) ? $ua : '';
+        }
 }
 
 new GN_Password_Login_API();
