@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,6 +55,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 
 == Changelog ==
 
+= 1.3.1 =
+* Version bump for maintenance release.
+
 = 1.3.0 =
 * Added an authenticated REST endpoint for users to change their own password after confirming the current credential.
 * Automatically refreshes the session after a successful password change and documents the new flow.
@@ -74,6 +77,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.3.1 =
+Maintenance release.
 
 = 1.3.0 =
 Adds an authenticated change-password endpoint and refreshes the session after a successful update.
