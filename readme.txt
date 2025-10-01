@@ -19,7 +19,7 @@ Key features:
 
 * Requires HTTPS (unless explicitly allowed in development) and supports username or email based authentication.
 * Rate limits login attempts to 5 per 15 minutes per IP and username and returns generic error messages to avoid user enumeration.
-* Default `token` mode returns a one-time token and login URL with a 60 second TTL; tokens are tied to the requesting IP and user agent and are consumed at `/wp-login.php?action=gn_token_login&token=...&u=...`.
+* Default `token` mode returns a one-time token and login URL with a one year TTL; tokens are tied to the requesting IP and user agent and are consumed at `/wp-login.php?action=gn_token_login&token=...&u=...`.
 * Optional `cookie` mode sets the normal WordPress auth cookies immediately for same-origin usage.
 * Registration endpoint validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 * Forgot-password endpoint triggers the standard WordPress reset email while keeping responses generic when the account is unknown.
@@ -41,7 +41,7 @@ No. The endpoint enforces HTTPS and returns an error when accessed insecurely un
 
 = How do I use the token login flow? =
 
-Send a POST request with `mode` omitted or set to `token`. On success you will receive `token_login_url`; opening that URL in a browser within 60 seconds will set the auth cookies (respecting the `remember` flag) and redirect to the sanitized `redirect_to` value.
+Send a POST request with `mode` omitted or set to `token`. On success you will receive `token_login_url`; opening that URL in a browser within one year will set the auth cookies (respecting the `remember` flag) and redirect to the sanitized `redirect_to` value.
 
 = Can I set cookies directly from another domain? =
 

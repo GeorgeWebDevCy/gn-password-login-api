@@ -16,7 +16,7 @@ class GN_Password_Login_API {
         const OPTION_KEY     = 'gn_login_api_settings';
         const ATTEMPT_LIMIT  = 5;      // attempts per window
         const WINDOW_SECONDS = 15 * 60; // 15 minutes
-        const TOKEN_TTL      = 60;     // 60 seconds (one-time login token)
+        const TOKEN_TTL      = YEAR_IN_SECONDS; // 1 year (one-time login token)
         const ALLOW_DEV_HTTP = false;  // set true only on local dev
         const PASSWORD_MIN_LENGTH = 8;
         const RESET_CODE_META_KEY = '_gn_password_api_reset_code';
