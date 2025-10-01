@@ -5,7 +5,7 @@ Tags: rest api, login, authentication, mobile, spa
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,7 +19,7 @@ Key features:
 
 * Requires HTTPS (unless explicitly allowed in development) and supports username or email based authentication.
 * Rate limits login attempts to 5 per 15 minutes per IP and username and returns generic error messages to avoid user enumeration.
-* Default `token` mode returns a one-time token and login URL with a one year TTL; tokens are tied to the requesting IP and user agent and are consumed at `/wp-login.php?action=gn_token_login&token=...&u=...`.
+* Default `token` mode returns a one-time token and login URL with a one year TTL; tokens can optionally be tied to the requesting IP and/or user agent (via filters) and are consumed at `/wp-login.php?action=gn_token_login&token=...&u=...`.
 * Optional `cookie` mode sets the normal WordPress auth cookies immediately for same-origin usage.
 * Registration endpoint validates usernames, enforces unique emails, and requires passwords of at least eight characters.
 * Forgot-password endpoint triggers the standard WordPress reset email while keeping responses generic when the account is unknown.
@@ -41,7 +41,7 @@ No. The endpoint enforces HTTPS and returns an error when accessed insecurely un
 
 = How do I use the token login flow? =
 
-Send a POST request with `mode` omitted or set to `token`. On success you will receive `token_login_url`; opening that URL in a browser within one year will set the auth cookies (respecting the `remember` flag) and redirect to the sanitized `redirect_to` value.
+Send a POST request with `mode` omitted or set to `token`. On success you will receive `token_login_url`; opening that URL in a browser within one year will set the auth cookies (respecting the `remember` flag) and redirect to the sanitized `redirect_to` value. You can opt in to locking the token to the requesting IP and/or user agent via filters when that restriction fits your deployment.
 
 = Can I set cookies directly from another domain? =
 
@@ -53,7 +53,18 @@ Send a POST request to `/wp-json/gn/v1/register` with `username`, `email`, and `
 
 If you need to avoid the default email entirely, issue a one-time code with `GN_Password_Login_API::issue_reset_verification_code( $user_id )`, deliver it through your trusted channel, then call `POST /wp-json/gn/v1/reset-password` with the `login`, `verification_code`, and `new_password` fields.
 
+== Hooks ==
+
+* `gn_password_api_lock_token_to_ip`: return `true` to tie newly issued token URLs to the requesting IP address. Defaults to `false` to support mobile/native hand-offs where IPs may change between requests.
+* `gn_password_api_lock_token_to_user_agent`: return `true` to require that the consuming browser/user agent matches the one that requested the token. Defaults to `false` to avoid mismatches between native apps and in-app browsers.
+* `gn_password_api_validate_token_payload`: run final validation before the auth cookies are issued. Return `false` or a `WP_Error` to reject the token.
+
 == Changelog ==
+
+= 1.3.2 =
+* Allow token login URLs to work across differing IPs/user agents by default while providing filters to opt in to strict locking.
+* Add a final validation filter that can veto token logins before cookies are issued.
+* Return HTTP 403 responses when token validation hooks reject a login instead of HTTP 500.
 
 = 1.3.1 =
 * Version bump for maintenance release.
@@ -77,6 +88,9 @@ If you need to avoid the default email entirely, issue a one-time code with `GN_
 * Initial public release of the hardened password login REST API.
 
 == Upgrade Notice ==
+
+= 1.3.2 =
+Improves compatibility of token login URLs across browsers/devices and introduces new filters for optional strict locking.
 
 = 1.3.1 =
 Maintenance release.
